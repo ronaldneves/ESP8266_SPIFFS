@@ -14,8 +14,8 @@ unsigned long debounce_delay = 50;
 unsigned long debounce = 0;
 int botao_com_debounce = 0;
 
-const char* nome_wifi = "LIVE TIM_8227_2G";
-const char* senha_wifi = "zazabox11";
+const char* nome_wifi = ""; // substituir por nome da wifi
+const char* senha_wifi = ""; // substituir por senha da wifi
 const char* servidor_ntp = "pool.ntp.org";
 unsigned long ajuste_fuso = (-3 * 3600);
 WiFiUDP udp;
@@ -23,6 +23,8 @@ NTPClient cliente_tempo(udp, "pool.ntp.org", ajuste_fuso);
 String hora_data = "";
 
 int controle_impressao = 0;
+const char* nome_do_arquivo = "/log.txt";
+String log_template = "";
 
 
 // FUNÇÕES
@@ -78,7 +80,20 @@ void checa_arquivo(const char* nome_do_arquivo) {
   if (!SPIFFS.exists(nome_do_arquivo)) {
     File arquivo_inicial = SPIFFS.open(nome_do_arquivo, "w");
     arquivo_inicial.println("Início do Log de Acesso.");
+    arquivo_inicial.close();
+    Serial.println("Arquivo base criado com sucesso.");
   }
+  else {
+    Serial.println("Arquivo base encontrado na memória.");
+  }
+}
+
+
+void salva_log(const char* nome_arquivo, String log_hora_data) {
+  File arquivo = SPIFFS.open(nome_arquivo, "a");
+  arquivo.println(log_hora_data);
+  arquivo.close();
+  Serial.println("Log gerado.");
 }
 
 
@@ -87,7 +102,11 @@ void setup() {
   Serial.begin(9600);
   pinMode(botao_acesso, INPUT_PULLUP);
   setup_wifi(nome_wifi, senha_wifi);
+
   cliente_tempo.begin();
+  SPIFFS.begin();
+
+  checa_arquivo(nome_do_arquivo);
 }
 
 
@@ -97,10 +116,10 @@ void loop() {
   botao_com_debounce = debounce_botao(botao_acesso);
 
   if (botao_com_debounce == 0 && controle_impressao == 0) {
-    Serial.println(pega_data_hora(cliente_tempo));
+    log_template = "Botão pressionado: " + pega_data_hora(cliente_tempo);
+    salva_log(nome_do_arquivo, log_template);
     controle_impressao = 1;  // controle de impressão
-  } 
-  
+  }  
   else if (botao_com_debounce != 0) {
     controle_impressao = 0;  // reset do controle 
   }
