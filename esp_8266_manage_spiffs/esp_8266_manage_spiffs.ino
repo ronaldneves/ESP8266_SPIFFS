@@ -1,5 +1,4 @@
 #include "FS.h"
-String nome_do_arquivo = "";
 
 void setup() {
   Serial.begin(9600);
