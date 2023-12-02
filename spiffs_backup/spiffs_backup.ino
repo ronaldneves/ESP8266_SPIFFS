@@ -1,87 +1,87 @@
-// LIBS
+/*
+1. Criar função que gere dados aleatorios para simular um sensor de nivel numa caixa d'água (1 a 3, sendo 1 = vazio); -- OK
+2. Criar função para contar quantas vezes a caixa d'água ficou vazia no dia (leitura == 1); -- OK
+3. Criar função para que a cada X tempo, esse contador seja armazenado num arquivo .txt na memória flash; -- OK
+4. Ao inicializar, a ESP8266 precisa checar o valor do contador armazenado anteriormente e dar continuidade ao contador; -- OK
+*/
+// BIBLIOTECAS
 #include "FS.h"
+
 
 // VARIAVEIS
 int leitura_sensor = 0;
 int contador_evento = 0;
-int valor_de_interesse = 7;
-unsigned long tempo_sensor = 1000;
-unsigned long tempo_backup = 5000;
+int comparador_evento = 1; // 1 significa tanque vazio. quero contar quantas vezes o tanque ficou vazio
 unsigned long millis_sensor = 0;
+unsigned long tempo_sensor = 2000;
+unsigned long tempo_backup = 5000;
 unsigned long millis_backup = 0;
+const char* nome_do_arquivo = "/backup.txt";
+String template_backup = "Backup do contador: ";
 
-String texto_template = "Backup contador: ";
-const char* nome_do_arquivo = "/log.txt";
+void setup() {
+  Serial.begin(9600);
+  SPIFFS.begin();
+  contador_evento = restaura_backup(nome_do_arquivo, contador_evento);
+}
+
+void loop() {
+  if ((millis() - millis_sensor) > tempo_sensor) {
+    millis_sensor = millis();
+    leitura_sensor = simulador_sensor(leitura_sensor);
+    Serial.print("Valor de leitura do sensor da caixa d'água: ");
+    Serial.println(leitura_sensor);
+    Serial.print("Valor do contador de eventos: ");
+    contador_evento = contador(leitura_sensor, contador_evento, comparador_evento);
+    Serial.println(contador_evento);
+  } 
+
+  if ((millis() - millis_backup) > tempo_backup) {
+    millis_backup = millis();
+    salva_backup(contador_evento, nome_do_arquivo);
+  }
+}
 
 
 // FUNÇÕES
-int controle_contagem(int sensor, int contador, int comparador) {
-  if (sensor == comparador) {
-    contador += 1;
-    Serial.print("Evento ocorrido. Valor do contador: ");
-    Serial.println(contador_evento);
-  }
-  return contador;
+// gerar dados aleatorios para simular sensor
+int simulador_sensor(int sensor) {
+  sensor = random(1, 4); // 4 não incluso. ele conta de 1 a 3 (1, 2, 3)
+  return sensor;
 }
 
 
-void salva_backup(int contador, const char* nome_do_arquivo, String template_texto) {
+// função para monitorar eventos desejados
+int contador(int sensor, int contador_evento, int comparador) {
+  if (sensor == comparador) {
+    contador_evento += 1;
+    Serial.print("Evento detectado. ");
+  }
+
+  return contador_evento;
+}
+
+
+// função para salvar o valor da contagem num backup
+void salva_backup(int contador, const char* nome_do_arquivo) {
   File backup = SPIFFS.open(nome_do_arquivo, "w");
-  backup.print(template_texto);
   backup.println(contador);
   backup.close();
 
-  Serial.println("Backup realizado com sucesso");
+  Serial.println("Backup realizado com sucesso.");
 }
 
 
-int checa_arquivo(const char* nome_do_arquivo, int contador, String template_texto) { // se arquivo não existir, cria. se existir, restaura o valor na variavel.
-  if (!SPIFFS.exists(nome_do_arquivo)) {
-    Serial.println("Arquivo de backup não encontrado. Criando novo arquivo de backup");
-    File arquivo_inicial = SPIFFS.open(nome_do_arquivo, "w");
-    arquivo_inicial.println("Backup do contador de ocorrências.");
-    arquivo_inicial.close();
-  }
-
-  else {
-    Serial.println("Arquivo de backup encontrado. Recuperando valor do contador");
+// função de restauro de backup
+int restaura_backup(const char* nome_do_arquivo, int contador) {
+  if (SPIFFS.exists(nome_do_arquivo)) {
+    Serial.println("Arquivo de backup encontrado. Restaurando valor do contador.");
     File backup = SPIFFS.open(nome_do_arquivo, "r");
 
     while(backup.available()) {
       String linha = backup.readStringUntil('\n');
-      int posicao = linha.indexOf(template_texto);
-
-      if (posicao != -1) {
-        int tamanho = template_texto.length();
-        contador = linha.substring(posicao + tamanho).toInt();  
-      }
+      contador = linha.toInt();        
     }
   }
   return contador;
-}
-
-
-// SETUP
-void setup() {
-  Serial.begin(9600);
-  SPIFFS.begin();
-  contador_evento = checa_arquivo(nome_do_arquivo, contador_evento, texto_template);
-}
-
-
-// LOOP
-void loop() {
-  if (millis() - millis_sensor > tempo_sensor) {
-    millis_sensor = millis();
-    leitura_sensor = random(0, 11);
-    Serial.println(leitura_sensor);
-
-    contador_evento = controle_contagem(leitura_sensor, contador_evento, valor_de_interesse);    
-  }
-
-
-  if (millis() - millis_backup > tempo_backup) {
-    millis_backup = millis();
-    salva_backup(contador_evento, nome_do_arquivo, texto_template);
-  }
 }
